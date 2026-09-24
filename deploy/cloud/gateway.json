@@ -1,0 +1,151 @@
+{
+  "admin": {
+    "disabled": true,
+    "config": {
+      "persist": false
+    }
+  },
+  "apps": {
+    "http": {
+      "servers": {
+        "cloud": {
+          "listen": [":8443"],
+          "routes": [
+            {
+              "match": [
+                {
+                  "host": ["cloud.thermora.io", "localhost"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "headers": {
+                    "request": {
+                      "set": {
+                        "Host": ["{http.request.hostport}"]
+                      }
+                    }
+                  },
+                  "transport": {
+                    "protocol": "http",
+                    "tls": {
+                      "server_name": "cloud",
+                      "ca": {
+                        "provider": "file",
+                        "pem_files": ["/run/pki/ca.pem"]
+                      }
+                    }
+                  },
+                  "upstreams": [
+                    {
+                      "dial": "floci-eks-thermora-cloud:30443"
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "match": [
+                {
+                  "host": ["manufacturer.thermora.io", "manufacturer.localhost"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "headers": {
+                    "request": {
+                      "set": {
+                        "Host": ["{http.request.hostport}"]
+                      }
+                    }
+                  },
+                  "transport": {
+                    "protocol": "http",
+                    "tls": {
+                      "server_name": "manufacturer",
+                      "ca": {
+                        "provider": "file",
+                        "pem_files": ["/run/pki/ca.pem"]
+                      }
+                    }
+                  },
+                  "upstreams": [
+                    {
+                      "dial": "floci-eks-thermora-cloud:30444"
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            }
+          ],
+          "tls_connection_policies": [{}],
+          "automatic_https": {
+            "disable": true
+          }
+        },
+        "manufacturer": {
+          "listen": [":8444"],
+          "routes": [
+            {
+              "match": [
+                {
+                  "host": ["manufacturer.thermora.io", "manufacturer.localhost"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "headers": {
+                    "request": {
+                      "set": {
+                        "Host": ["{http.request.hostport}"]
+                      }
+                    }
+                  },
+                  "transport": {
+                    "protocol": "http",
+                    "tls": {
+                      "server_name": "manufacturer",
+                      "ca": {
+                        "provider": "file",
+                        "pem_files": ["/run/pki/ca.pem"]
+                      }
+                    }
+                  },
+                  "upstreams": [
+                    {
+                      "dial": "floci-eks-thermora-cloud:30444"
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            }
+          ],
+          "tls_connection_policies": [{}],
+          "automatic_https": {
+            "disable": true
+          }
+        }
+      }
+    },
+    "tls": {
+      "certificates": {
+        "load_files": [
+          {
+            "certificate": "/run/pki/cloud.pem",
+            "key": "/run/pki/cloud.key"
+          },
+          {
+            "certificate": "/run/pki/manufacturer.pem",
+            "key": "/run/pki/manufacturer.key"
+          }
+        ]
+      }
+    }
+  }
+}

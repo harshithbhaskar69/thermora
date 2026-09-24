@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <script src="/theme/theme.js"></script>
+    <link rel="stylesheet" href="/theme/tokens.css" />
+    <title>Thermora · API explorer</title>
+  </head>
+  <body>
+    <header class="explorer-header">
+      <button
+        type="button"
+        class="theme-toggle"
+        data-theme-toggle
+        aria-label="Switch theme"
+        title="Switch theme"
+      >
+        <svg
+          aria-hidden="true"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <g class="theme-sun">
+            <circle cx="12" cy="12" r="4" />
+            <path
+              d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"
+            />
+          </g>
+          <path
+            class="theme-moon"
+            d="M20.5 13.5A8.5 8.5 0 0 1 10.5 3.5a8.5 8.5 0 1 0 10 10Z"
+          />
+        </svg>
+      </button>
+      <nav aria-label="API explorer navigation">
+        <a href="/">← Thermora dashboard</a>
+        <a href="/docs/">Cloud APIs</a>
+        <a href="/docs/?api=manufacturer">Manufacturer API reference</a>
+        <a href="/openapi.yaml" download="thermora-openapi.yaml"
+          >Download cloud OpenAPI</a
+        >
+      </nav>
+      <h1>API explorer</h1>
+      <p>
+        Browse every implemented HTTP operation. Sign in through the
+        <a href="/" target="_blank" rel="noopener">dashboard</a>, then use
+        <strong>Try it out</strong> here with the same browser session.
+        Executing a write changes your local simulation.
+      </p>
+      <p>
+        Session cookies are handled by your browser; do not paste them into
+        Authorize. Edge activation uses its separate bootstrap bearer
+        credential. MQTT and Modbus are device protocols, not HTTP endpoints.
+      </p>
+      <p>
+        The manufacturer reference documents the separate server-to-server
+        integration. Its equipment API is read-only in this explorer; OAuth
+        credentials stay in the cloud backend.
+      </p>
+    </header>
+    <main id="swagger-ui" aria-label="HTTP API reference"></main>
+    <noscript
+      >Enable JavaScript to explore the API, or download the OpenAPI document
+      above.</noscript
+    >
+    <script type="module" src="/src/explorer.ts"></script>
+  </body>
+</html>

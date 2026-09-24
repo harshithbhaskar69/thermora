@@ -1,0 +1,342 @@
+version: "3"
+
+vars:
+  COMPOSE: sh scripts/compose.sh
+  CLOUD_COMPOSE: sh scripts/cloud-compose.sh
+  # Do not discover third-party Go files shipped inside web/node_modules.
+  GO_PACKAGES: ./cmd/... ./internal/... ./api/... ./migrations/... ./web
+  GO_SOURCES: cmd internal api migrations web/embed.go
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds: [task --list]
+
+  setup:
+    desc: Install locked application dependencies (run after mise install)
+    cmds:
+      - sh scripts/check-tools.sh
+      - go mod download
+      - npm --prefix web ci
+
+  doctor:
+    desc: Check pinned tools and the Docker daemon without printing configuration
+    cmds:
+      - sh scripts/check-tools.sh
+      - go version
+      - node --version
+      - npm --version
+      - aws --version
+      - task --version
+      - golangci-lint version
+      - docker version --format '{{`{{.Server.Version}}`}}'
+      - docker compose version
+
+  build:web:
+    desc: Type-check and build the embedded dashboard and API explorer
+    sources:
+      [
+        web/src/**/*,
+        web/e2e/**/*,
+        web/tooling/**/*,
+        web/ui/**/*,
+        web/public/**/*,
+        web/*.ts,
+        web/*.json,
+        web/index.html,
+        web/docs/index.html,
+      ]
+    generates: [web/dist/index.html, web/dist/docs/index.html]
+    cmds: [npm --prefix web run build]
+
+  provision:
+    desc: Create local certificates and credentials, preserving existing identity
+    cmds:
+      - task: build:web
+      - go run ./cmd/thermora provision-local
+
+  up:
+    desc: Build and start the Compose system; preserve existing data
+    cmds:
+      - task: provision
+      - "{{.COMPOSE}} up --build -d --wait --wait-timeout 180"
+
+  demo:
+    desc: Start the system and seed private demo access (no reset)
+    cmds:
+      - task: up
+      - task: demo:seed
+
+  demo:seed:
+    desc: Refresh demo access on a running system; preserve enrolled devices
+    silent: true
+    env:
+      THERMORA_DEVICE: '{{.DEVICE | default ""}}'
+    cmds:
+      - sh scripts/seed-demo.sh {{.COMPOSE}}
+
+  demo:onboarding:
+    desc: Start cloud onboarding with a separate mock manufacturer account and heat pump
+    cmds:
+      - task: provision
+      - go run ./cmd/thermora provision-onboarding
+      - "{{.COMPOSE}} up --build -d --wait --wait-timeout 180"
+      - "{{.COMPOSE}} exec -T cloud thermora seed-onboarding"
+      - echo 'Open https://localhost:8443/connect; private manufacturer credentials and partner code are in .local/onboarding-access.json.'
+
+  demo:device:add:
+    desc: Provision and start an independent heat pump (DEVICE=helsinki); reuse the name to retry
+    requires:
+      vars: [DEVICE]
+    env:
+      THERMORA_DEVICE: "{{.DEVICE}}"
+    cmds:
+      - task: provision
+      - go run ./cmd/thermora provision-device "$THERMORA_DEVICE"
+      - "{{.COMPOSE}} up --build -d --wait --wait-timeout 180 cloud"
+      - sh scripts/seed-demo.sh {{.COMPOSE}}
+      - '{{.COMPOSE}} up --no-build --no-deps -d --wait --wait-timeout 60 "sim-$THERMORA_DEVICE" "edge-$THERMORA_DEVICE"'
+
+  down:
+    desc: Stop Compose; retain volumes and .local state
+    cmds: ["{{.COMPOSE}} down"]
+
+  nuke:
+    desc: Permanently delete all Thermora runtime data and Docker resources after confirmation
+    silent: true
+    cmds: [sh scripts/nuke.sh]
+
+  cloud:local-install:
+    desc: Explicit administrator setup of local hostnames and certificate trust
+    cmds:
+      - task: build:web
+      - go run ./cmd/thermora provision-cloud
+      - echo 'This updates owned /etc/hosts entries and trusts only the public Thermora CA. No private CA key is installed.'
+      - go run -exec sudo ./cmd/thermora cloud-local-install
+
+  cloud:local-uninstall:
+    desc: Remove only this installation's hostnames and certificate trust
+    cmds:
+      - go run -exec sudo ./cmd/thermora cloud-local-uninstall
+
+  cloud:doctor:
+    desc: Check local DNS, system certificate trust and cloud readiness
+    cmds: [go run ./cmd/thermora cloud-doctor]
+
+  cloud:access:
+    desc: Explain cloud and manufacturer access without printing credentials
+    cmds: [go run ./cmd/thermora cloud-access]
+
+  cloud:up:
+    desc: Build Thermora Cloud in a local Floci EKS cluster, preserving separate cloud-profile state
+    env:
+      THERMORA_LOCALHOST: '{{.LOCALHOST | default "0"}}'
+    cmds:
+      - task: build:web
+      - go run ./cmd/thermora cloud-origins
+      - go run ./cmd/thermora cloud-dns
+      - go run ./cmd/thermora provision-cloud
+      - "{{.CLOUD_COMPOSE}} build sim gateway"
+      - "{{.CLOUD_COMPOSE}} up -d --wait --wait-timeout 90 floci"
+      - go run ./cmd/thermora cloud-cluster
+      - sh scripts/cloud.sh start
+      - sh scripts/cloud.sh deploy
+      - "{{.CLOUD_COMPOSE}} up -d"
+      - go run ./cmd/thermora cloud-health
+      - task: cloud:access
+
+  cloud:resume:
+    desc: Resume a previously prepared cloud without builds, image pulls or provisioning
+    cmds:
+      - go run ./cmd/thermora cloud-dns
+      - "{{.CLOUD_COMPOSE}} up -d --no-build --pull never --wait --wait-timeout 90 floci"
+      - sh scripts/cloud.sh start
+      - "{{.CLOUD_COMPOSE}} up -d --no-build --pull never"
+      - go run ./cmd/thermora cloud-health
+
+  cloud:down:
+    desc: Stop the local cloud profile and cluster; retain database, equipment and credentials
+    cmds:
+      - "{{.CLOUD_COMPOSE}} stop"
+      - sh scripts/cloud.sh stop
+
+  cloud:fleet:
+    desc: Provision and exercise ten named manufacturer fixtures (COUNT=10, total catalog cap 25)
+    env:
+      THERMORA_CLOUD_TEST: "1"
+      THERMORA_FLEET_TEST: "1"
+      THERMORA_FLEET_COUNT: '{{.COUNT | default "10"}}'
+    cmds:
+      - go run ./cmd/thermora cloud-fleet "$THERMORA_FLEET_COUNT"
+      - sh scripts/cloud.sh deploy
+      - "{{.CLOUD_COMPOSE}} up -d --no-build --pull never"
+      - npm --prefix web run test:e2e -- cloud-fleet.spec.ts
+
+  cloud:device:add:
+    desc: Add a separate cloud heat pump and partner invitation (DEVICE=helsinki)
+    requires:
+      vars: [DEVICE]
+    env:
+      THERMORA_DEVICE: "{{.DEVICE}}"
+    cmds:
+      - go run ./cmd/thermora cloud-device "$THERMORA_DEVICE"
+      - sh scripts/cloud.sh add-device "$THERMORA_DEVICE"
+      - '{{.CLOUD_COMPOSE}} up -d --no-build --no-deps "sim-$THERMORA_DEVICE" "edge-$THERMORA_DEVICE"'
+      - go run ./cmd/thermora cloud-health
+
+  backup:
+    desc: Quiesce the local cloud, snapshot database/journals/artifacts/secrets, then resume
+    cmds: [sh scripts/cloud-backup.sh backup]
+
+  restore:
+    desc: Verify a private cloud backup in an isolated empty PostgreSQL container; never replace live controls
+    requires:
+      vars: [FILE]
+    env:
+      THERMORA_BACKUP: "{{.FILE}}"
+    cmds: ['sh scripts/cloud-backup.sh verify "$THERMORA_BACKUP"']
+
+  cloud:kubectl:
+    desc: Inspect only the local Floci cluster (for example -- get pods)
+    cmds: ["sh scripts/cloud.sh kubectl {{.CLI_ARGS}}"]
+
+  cloud:aws:
+    desc: Run AWS CLI against local Floci (for example -- s3 ls or -- eks list-clusters)
+    silent: true
+    cmds: ["sh scripts/cloud-aws.sh {{.CLI_ARGS}}"]
+
+  generate:
+    desc: Regenerate committed HTTP boundary types
+    cmds:
+      - go generate ./api
+      - npm --prefix web run generate
+
+  contracts:check:
+    desc: Check generated drift and HTTP/MQTT schema conformance
+    cmds:
+      - task: build:web
+      - sh scripts/check-contracts.sh
+
+  lint:
+    desc: Check every maintained code/configuration language without rewriting files
+    cmds:
+      - task: lint:go
+      - npm --prefix web run lint
+      - npm --prefix web run format:check
+      - shellcheck scripts/*.sh
+      - shfmt -d -i 2 scripts/*.sh
+      - hadolint deploy/compose/Dockerfile deploy/cloud/Dockerfile
+      - actionlint
+      - web/node_modules/.bin/squawk --assume-in-transaction migrations/*.sql
+
+  lint:go:
+    desc: Check all maintained Go, including integration tests, without rewriting files
+    cmds:
+      - task: build:web
+      - golangci-lint config verify
+      - golangci-lint fmt --diff {{.GO_SOURCES}}
+      - golangci-lint run {{.GO_PACKAGES}}
+
+  format:
+    desc: Format maintained source/configuration; generated files are excluded
+    cmds:
+      - task: format:go
+      - npm --prefix web run format
+      - shfmt -w -i 2 scripts/*.sh
+
+  format:go:
+    desc: Format maintained Go with gofumpt, goimports and 120-column wrapping
+    cmds: ["golangci-lint fmt {{.GO_SOURCES}}"]
+
+  test:
+    desc: Run Go race tests and frontend unit tests
+    cmds:
+      - task: build:web
+      - go test -race -shuffle=on -count=1 -coverprofile=coverage.out {{.GO_PACKAGES}}
+      - npm --prefix web test
+
+  test:ui:
+    desc: Verify themes, responsive UI and data states with deterministic browser fixtures
+    cmds:
+      - task: build:web
+      - npm --prefix web run test:ui
+
+  test:protocol:
+    desc: Check the thermal model, Modbus, edge state and message contracts
+    cmds:
+      - go test -race -shuffle=on -count=1 ./internal/sim ./internal/protocol ./internal/edge ./internal/messaging
+
+  test:integration:
+    desc: Run uncached PostgreSQL/MQTT integration tests in disposable containers
+    cmds:
+      - task: build:web
+      - go test -race -shuffle=on -count=1 -tags=integration ./internal/cloud ./internal/messaging
+
+  setup:browser:
+    desc: Download the pinned Playwright Chromium (Linux may need OS libraries)
+    cmds: [npm --prefix web exec -- playwright install chromium]
+
+  test:e2e:
+    desc: Provision a dedicated e2e pump and exercise it in Chromium
+    preconditions:
+      - sh: test -f .local/demo-access.json
+        msg: Run task demo first.
+    cmds:
+      - task: demo:device:add
+        vars: { DEVICE: e2e }
+      - npm --prefix web run test:e2e
+
+  test:cloud:
+    desc: Exercise cloud onboarding and the real control loop using a dedicated e2e heat pump
+    env:
+      THERMORA_CLOUD_TEST: "1"
+      THERMORA_FLOCI_TEST: "1"
+    cmds:
+      - go test -race -count=1 -tags=integration ./internal/artifacts
+      - task: cloud:device:add
+        vars: { DEVICE: e2e }
+      - npm --prefix web run test:e2e -- cloud-onboarding.spec.ts
+      - npm --prefix web run test:e2e -- api-explorer.spec.ts
+
+  test:recovery:
+    desc: Briefly stop the local cloud broker/database and verify recovery of buffered telemetry
+    env:
+      THERMORA_CLOUD_TEST: "1"
+      THERMORA_RECOVERY_TEST: "1"
+    preconditions:
+      - sh: test -f .local/cloud/devices/e2e/browser-account.json
+        msg: Run task test:cloud first to enroll the dedicated browser-test device.
+    cmds: [npm --prefix web run test:e2e -- cloud-recovery.spec.ts]
+
+  verify:demo:
+    desc: Rehearse cloud onboarding, ten-device dispatch, outages, isolated restore and no-pull restart
+    cmds:
+      - task: test:cloud
+      - task: cloud:fleet
+      - task: test:recovery
+      - task: backup
+      - sh scripts/cloud-backup.sh verify "$(cat .local/backups/latest)"
+      - task: cloud:down
+      - task: cloud:resume
+
+  security:
+    desc: Check Go and npm dependencies against current advisory databases (online)
+    cmds:
+      - task: build:web
+      - govulncheck {{.GO_PACKAGES}}
+      - npm --prefix web audit --audit-level=high
+
+  check:
+    desc: Run lint, contract checks and unit/race tests (no Docker required)
+    cmds:
+      - task: lint
+      - task: contracts:check
+      - task: test
+
+  ci:
+    desc: Run static/unit gates plus dependency and lockfile consistency checks
+    cmds:
+      - task: check
+      - go mod tidy -diff
+      - go mod verify
+      - task: security

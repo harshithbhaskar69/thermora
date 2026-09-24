@@ -1,0 +1,128 @@
+openapi: 3.0.3
+info:
+  title: Thermora simulated manufacturer API
+  version: 1.0.0
+  description: Local fixture only. OAuth authorizes discovery and control of one provisioned household. Register application and telemetry confirmation are separate from HTTP acceptance.
+servers:
+  - url: https://manufacturer.localhost:9444
+security:
+  - bearer: []
+paths:
+  /devices:
+    get:
+      responses:
+        "200":
+          {
+            description: Household subject and explicitly provisioned device IDs/names,
+          }
+  /devices/{device_id}/state:
+    parameters:
+      - $ref: "#/components/parameters/device"
+    get:
+      responses:
+        "200":
+          description: Bounded durable evidence feed, current sample and point capabilities. Evidence is retained until receipt, not removed on GET.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device_id, messages, points]
+                properties:
+                  device_id: { type: string }
+                  messages:
+                    type: array
+                    maxItems: 25
+                    items: { $ref: "#/components/schemas/Message" }
+                  points:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, unit, readable, writable]
+                      properties:
+                        name: { type: string }
+                        unit: { type: string }
+                        readable: { type: boolean }
+                        writable: { type: boolean }
+                  latest:
+                    {
+                      type: object,
+                      nullable: true,
+                      description: Thermora protocol v1 sample with observation and recording timestamps; absent before first sample,
+                    }
+        "401": { description: Expired or invalid access grant }
+        "404": { description: Device is outside the authorized household }
+        "503": { description: Local equipment transport unavailable }
+  /devices/{device_id}/control:
+    parameters:
+      - $ref: "#/components/parameters/device"
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Message" }
+      responses:
+        "202":
+          {
+            description: Message forwarded to the equipment transport; not evidence of acceptance or application,
+          }
+        "401": { description: Reauthorize devices read/control scope }
+        "404": { description: Device is outside the authorized household }
+        "422":
+          {
+            description: "Invalid kind, identity, schema or expired command/lease",
+          }
+        "503":
+          { description: Retry the same command ID after provider recovery }
+  /devices/{device_id}/receipts:
+    parameters:
+      - $ref: "#/components/parameters/device"
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string, maxLength: 100 }
+      responses:
+        "204":
+          {
+            description: Idempotently remove evidence already persisted by Thermora Cloud,
+          }
+        "401": { description: Invalid grant }
+        "404": { description: Device is outside the authorized household }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer }
+  parameters:
+    device:
+      { name: device_id, in: path, required: true, schema: { type: string } }
+  schemas:
+    Message:
+      type: object
+      additionalProperties: false
+      required: [id, kind, payload]
+      properties:
+        id: { type: string, maxLength: 100 }
+        kind:
+          type: string
+          enum:
+            [
+              demo/action,
+              demo/event,
+              telemetry,
+              command/event,
+              config/reported,
+              hello,
+              command,
+              config/desired,
+              control/lease,
+              telemetry/receipt,
+              command/event/receipt,
+            ]
+        payload:
+          type: object
+          description: "Validated Thermora protocol v1 payload; original sample, batch and command identities are preserved"

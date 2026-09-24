@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Thermora · Manufacturer authorization</title>
+    <script src="/theme/theme.js"></script>
+    <link rel="stylesheet" href="/theme/tokens.css" />
+    <link rel="stylesheet" href="/assets/authorization.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/">Thermora <span>demo manufacturer</span></a>
+      <button
+        type="button"
+        class="theme-toggle"
+        data-theme-toggle
+        aria-label="Switch theme"
+        title="Switch theme"
+      >
+        <svg
+          aria-hidden="true"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <g class="theme-sun">
+            <circle cx="12" cy="12" r="4" />
+            <path
+              d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"
+            />
+          </g>
+          <path
+            class="theme-moon"
+            d="M20.5 13.5A8.5 8.5 0 0 1 10.5 3.5a8.5 8.5 0 1 0 10 10Z"
+          />
+        </svg>
+      </button>
+    </header>
+    <main>
+      <h1>Connect your heat pump</h1>
+      <p>
+        Thermora Cloud is requesting access to the heat pumps in your
+        manufacturer account.
+      </p>
+      <ul>
+        <li>Discover your equipment and read its measurements.</li>
+        <li>Apply temperature settings you authorize in Thermora.</li>
+      </ul>
+      <form method="post">
+        <input type="hidden" name="csrf" value="{{.}}" />
+        <label
+          >Manufacturer email<input
+            type="email"
+            name="login"
+            autocomplete="username"
+            required
+            maxlength="254"
+        /></label>
+        <label
+          >Manufacturer password<input
+            type="password"
+            name="password"
+            autocomplete="current-password"
+            required
+            maxlength="256"
+        /></label>
+        <div class="actions">
+          <button name="decision" value="allow">Authorize device access</button
+          ><button
+            class="secondary"
+            name="decision"
+            value="deny"
+            formnovalidate
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+      <details>
+        <summary>Which account should I use?</summary>
+        <p>
+          Use <code>manufacturer_login</code> and
+          <code>manufacturer_password</code> from the private
+          <code>onboarding-access.json</code> provided by setup. Your Thermora
+          Cloud email and password belong to a separate account.
+        </p>
+      </details>
+      <p class="note">
+        Disconnect access in Thermora at any time. This is a local simulator; no
+        real manufacturer is contacted.
+      </p>
+    </main>
+  </body>
+</html>

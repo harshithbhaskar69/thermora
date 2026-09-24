@@ -1,0 +1,287 @@
+openapi: 3.1.0
+info:
+  title: Thermora MQTT v1 schema registry
+  version: 1.0.0
+  description: Schemas for MQTT payloads, not HTTP endpoints. Cross-field and temporal rules are enforced by protocol validation.
+paths: {}
+components:
+  schemas:
+    Hello:
+      type: object
+      required: [device_id, run_id, boot_id]
+      properties:
+        device_id: { $ref: "#/components/schemas/ID" }
+        run_id: { $ref: "#/components/schemas/ID" }
+        boot_id: { $ref: "#/components/schemas/ID" }
+        diagnostics: { $ref: "openapi.yaml#/components/schemas/Diagnostics" }
+    ID: { $ref: "openapi.yaml#/components/schemas/ID" }
+    Counter: { type: integer, minimum: 0, maximum: 4294967295 }
+    Version: { type: integer, minimum: 1, maximum: 4294967295 }
+    Comfort:
+      type: object
+      required: [target_c, min_c, max_c]
+      properties:
+        target_c: { type: number, minimum: 16, maximum: 26 }
+        min_c: { type: number, minimum: 16, maximum: 26 }
+        max_c: { type: number, minimum: 16, maximum: 26 }
+    Configuration:
+      type: object
+      required:
+        [
+          schema_version,
+          device_id,
+          run_id,
+          config_version,
+          generation,
+          issued_at_wall,
+          comfort,
+          automation,
+          baseline_curve_version,
+          model_version,
+          sample_interval_sim_seconds,
+          supply_limits,
+        ]
+      properties:
+        preset: { type: string, enum: [comfort, balanced, maximum-savings] }
+        hot_water:
+          type: object
+          required: [enabled, start_c, stop_c]
+          properties:
+            enabled: { type: boolean }
+            start_c: { type: number, minimum: 0, maximum: 52 }
+            stop_c: { type: number, minimum: 0, maximum: 55 }
+        weather_profile: { type: integer, minimum: 0, maximum: 4 }
+        schema_version: { type: integer, enum: [1] }
+        device_id: { $ref: "#/components/schemas/ID" }
+        run_id: { $ref: "#/components/schemas/ID" }
+        config_version: { $ref: "#/components/schemas/Version" }
+        generation: { $ref: "#/components/schemas/Version" }
+        issued_at_wall: { type: string, format: date-time }
+        comfort: { $ref: "#/components/schemas/Comfort" }
+        automation:
+          type: object
+          required: [optimization_enabled, flexibility_opt_in]
+          properties:
+            optimization_enabled: { type: boolean }
+            flexibility_opt_in: { type: boolean }
+        baseline_curve_version: { type: string, enum: [weather-v1] }
+        model_version:
+          { type: string, enum: [zone-supply-v1, zone-buffer-dhw-v1] }
+        sample_interval_sim_seconds: { type: integer, enum: [60] }
+        supply_limits:
+          type: object
+          required: [min_c, max_c]
+          properties:
+            min_c: { type: number, enum: [25] }
+            max_c: { type: number, enum: [50] }
+    ConfigReport:
+      type: object
+      required:
+        [
+          schema_version,
+          device_id,
+          run_id,
+          desired_version,
+          accepted_version,
+          reported_version,
+          status,
+          reported_at_wall,
+        ]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        device_id: { $ref: "#/components/schemas/ID" }
+        run_id: { $ref: "#/components/schemas/ID" }
+        desired_version: { $ref: "#/components/schemas/Version" }
+        accepted_version: { $ref: "#/components/schemas/Counter" }
+        reported_version: { $ref: "#/components/schemas/Counter" }
+        status: { type: string, enum: [accepted, applied] }
+        reported_at_wall: { type: string, format: date-time }
+    Command:
+      type: object
+      required:
+        [
+          schema_version,
+          command_id,
+          device_id,
+          run_id,
+          run_epoch,
+          command_seq,
+          generation,
+          config_version,
+          issued_at_wall,
+          expires_at_wall,
+          valid_from,
+          valid_until,
+          kind,
+          source,
+          reason_code,
+          correlation_id,
+          parameters,
+        ]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        command_id: { $ref: "#/components/schemas/ID" }
+        device_id: { $ref: "#/components/schemas/ID" }
+        run_id: { $ref: "#/components/schemas/ID" }
+        run_epoch: { $ref: "#/components/schemas/Version" }
+        command_seq: { $ref: "#/components/schemas/Version" }
+        generation: { $ref: "#/components/schemas/Version" }
+        config_version: { $ref: "#/components/schemas/Version" }
+        issued_at_wall: { type: string, format: date-time }
+        expires_at_wall: { type: string, format: date-time }
+        valid_from: { type: string, format: date-time }
+        valid_until: { type: string, format: date-time }
+        kind: { type: string, enum: [set_heating_policy] }
+        source:
+          {
+            type: string,
+            enum:
+              [
+                manual_override,
+                price_optimization,
+                flexibility_dispatch,
+                baseline,
+              ],
+          }
+        reason_code: { type: string, minLength: 1, maxLength: 64 }
+        correlation_id: { type: string, minLength: 1, maxLength: 128 }
+        parameters:
+          type: object
+          required: [mode, room_target_c, supply_setpoint_c]
+          properties:
+            mode: { type: string, enum: [baseline, remote] }
+            room_target_c: { type: number, minimum: 16, maximum: 26 }
+            supply_setpoint_c: { type: number, minimum: 25, maximum: 50 }
+    Lease:
+      type: object
+      required:
+        [
+          schema_version,
+          device_id,
+          run_id,
+          generation,
+          command_seq,
+          issued_at_wall,
+          valid_until_wall,
+        ]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        device_id: { $ref: "#/components/schemas/ID" }
+        run_id: { $ref: "#/components/schemas/ID" }
+        generation: { $ref: "#/components/schemas/Version" }
+        command_seq: { $ref: "#/components/schemas/Version" }
+        issued_at_wall: { type: string, format: date-time }
+        valid_until_wall: { type: string, format: date-time }
+    Event:
+      type: object
+      required:
+        [
+          schema_version,
+          event_id,
+          command_id,
+          device_id,
+          run_id,
+          stage,
+          occurred_at_wall,
+          observed_at,
+        ]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        event_id: { $ref: "#/components/schemas/ID" }
+        command_id: { $ref: "#/components/schemas/ID" }
+        device_id: { $ref: "#/components/schemas/ID" }
+        run_id: { $ref: "#/components/schemas/ID" }
+        stage:
+          {
+            type: string,
+            enum: [received, accepted, applied, rejected, confirmed],
+          }
+        reason_code: { type: string, maxLength: 64 }
+        occurred_at_wall: { type: string, format: date-time }
+        observed_at: { type: string, format: date-time }
+    Batch:
+      type: object
+      required:
+        [
+          schema_version,
+          device_id,
+          run_id,
+          boot_id,
+          batch_id,
+          origin,
+          sent_at_wall,
+          samples,
+        ]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        device_id: { $ref: "#/components/schemas/ID" }
+        run_id: { $ref: "#/components/schemas/ID" }
+        boot_id: { $ref: "#/components/schemas/ID" }
+        batch_id: { $ref: "#/components/schemas/ID" }
+        origin: { type: string, enum: [simulation] }
+        sent_at_wall: { type: string, format: date-time }
+        samples:
+          {
+            type: array,
+            minItems: 1,
+            maxItems: 100,
+            items: { $ref: "openapi.yaml#/components/schemas/Sample" },
+          }
+    Receipt:
+      type: object
+      required: [schema_version, status, received_at_wall]
+      oneOf:
+        - required: [batch_id]
+        - required: [event_id]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        batch_id: { $ref: "#/components/schemas/ID" }
+        event_id: { $ref: "#/components/schemas/ID" }
+        status: { type: string, enum: [committed, rejected] }
+        code: { type: string, maxLength: 64 }
+        received_at_wall: { type: string, format: date-time }
+
+    RunOperation:
+      type: object
+      required:
+        [
+          schema_version,
+          operation_id,
+          device_id,
+          run_id,
+          run_epoch,
+          operation_seq,
+          action,
+          rate,
+          model,
+          expires_at_wall,
+        ]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        operation_id: { $ref: "#/components/schemas/ID" }
+        device_id: { $ref: "#/components/schemas/ID" }
+        run_id: { $ref: "#/components/schemas/ID" }
+        run_epoch: { $ref: "#/components/schemas/Version" }
+        operation_seq: { $ref: "#/components/schemas/Version" }
+        action: { type: string, enum: [pause, resume, rate, reset] }
+        rate: { type: integer, enum: [1, 10, 60] }
+        model: { type: string, enum: [heating, heating-dhw] }
+        expires_at_wall: { type: string, format: date-time }
+    RunReport:
+      type: object
+      required:
+        [
+          schema_version,
+          operation_id,
+          device_id,
+          run_id,
+          run_epoch,
+          operation_seq,
+        ]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        operation_id: { $ref: "#/components/schemas/ID" }
+        device_id: { $ref: "#/components/schemas/ID" }
+        run_id: { $ref: "#/components/schemas/ID" }
+        run_epoch: { $ref: "#/components/schemas/Version" }
+        operation_seq: { $ref: "#/components/schemas/Version" }

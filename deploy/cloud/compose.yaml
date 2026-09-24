@@ -1,0 +1,69 @@
+name: thermora-cloud
+x-app: &app
+  image: thermora:local
+  build: { context: ../.., dockerfile: deploy/compose/Dockerfile }
+  user: "${THERMORA_UID:?Run task cloud:up}:${THERMORA_GID:?Run task cloud:up}"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  init: true
+  restart: unless-stopped
+services:
+  floci:
+    image: floci/floci:2.1.0@sha256:f5aa8c18302cedb4f2385f5c4e455b3efc77fee6bf7b6e5d1712b2817ba102db
+    ports: ["127.0.0.1:4566:4566"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - floci-data:/app/data
+    environment:
+      FLOCI_STORAGE_MODE: hybrid
+      FLOCI_SERVICES_DOCKER_NETWORK: thermora-cloud-uplink
+      FLOCI_SERVICES_EKS_DOCKER_NETWORK: thermora-cloud-uplink
+      FLOCI_SERVICES_EKS_DEFAULT_IMAGE: rancher/k3s:v1.36.4-k3s1@sha256:edad48e12bf81c3a09ac1c05c0c0ffaaa22145980b989d6fae84543a76b83657
+      FLOCI_SERVICES_EKS_API_SERVER_BASE_PORT: "16510"
+      FLOCI_SERVICES_EKS_API_SERVER_MAX_PORT: "16510"
+      # Keep node identity for local-path volumes; cloud.sh stops the node explicitly.
+      FLOCI_SERVICES_EKS_KEEP_RUNNING_ON_SHUTDOWN: "true"
+      # Image import and local client certificates make these optional integrations unnecessary.
+      FLOCI_SERVICES_EKS_ECR_REGISTRY_MIRROR: "false"
+      FLOCI_SERVICES_EKS_IAM_AUTH_WEBHOOK: "false"
+      FLOCI_HOSTNAME: floci
+      FLOCI_BASE_URL: http://floci:4566
+    networks: [uplink]
+    restart: unless-stopped
+  gateway:
+    image: thermora-gateway:local
+    build: { context: ., dockerfile: Dockerfile }
+    command: [caddy, run, --config, /etc/caddy/gateway.json]
+    user: "${THERMORA_UID}:${THERMORA_GID}"
+    read_only: true
+    tmpfs: [/tmp, /data, /config]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./gateway.json:/etc/caddy/gateway.json:ro
+      - ../../.local/cloud/pki/ca.pem:/run/pki/ca.pem:ro
+      - ../../.local/cloud/pki/cloud.pem:/run/pki/cloud.pem:ro
+      - ../../.local/cloud/pki/cloud.key:/run/pki/cloud.key:ro
+      - ../../.local/cloud/pki/manufacturer.pem:/run/pki/manufacturer.pem:ro
+      - ../../.local/cloud/pki/manufacturer.key:/run/pki/manufacturer.key:ro
+    networks: [uplink]
+    restart: unless-stopped
+  sim:
+    <<: *app
+    command: [sim]
+    volumes: ["../../.local/cloud/sim-state:/state"]
+    networks: [equipment]
+  edge:
+    <<: *app
+    command: [edge]
+    volumes:
+      - ../../.local/cloud/edge.json:/run/edge.json:ro
+      - ../../.local/cloud/pki/ca.pem:/run/pki/ca.pem:ro
+      - ../../.local/cloud/edge-state:/state
+    networks: [equipment, uplink]
+networks:
+  uplink: { name: thermora-cloud-uplink }
+  equipment: { internal: true }
+volumes:
+  floci-data: {}
