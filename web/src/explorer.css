@@ -1,0 +1,152 @@
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font);
+}
+
+.explorer-header {
+  max-width: 1420px;
+  margin: auto;
+  padding: 32px 20px 8px;
+}
+
+.explorer-header > .theme-toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+
+.explorer-header nav {
+  padding-right: 64px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  justify-content: space-between;
+}
+
+.explorer-header a {
+  color: var(--action);
+  text-underline-offset: 3px;
+}
+
+.explorer-header p {
+  max-width: 85ch;
+  line-height: 1.6;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--action);
+  outline-offset: 3px;
+}
+
+.swagger-ui .info {
+  margin: 24px 0;
+}
+
+.swagger-ui .scheme-container {
+  background: var(--surface);
+  box-shadow: none;
+}
+
+@media (width <= 600px) {
+  .swagger-ui .opblock .opblock-summary {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .swagger-ui .opblock .opblock-summary-path {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+
+::selection {
+  background: var(--selection);
+  color: var(--ink);
+}
+
+.swagger-ui {
+  color: var(--ink);
+}
+
+/* stylelint-disable selector-class-pattern -- These class names belong to the bundled Swagger UI. */
+.swagger-ui
+  :is(
+    .info .title,
+    .info p,
+    .info li,
+    .info hgroup,
+    .opblock-tag,
+    .opblock .opblock-summary-description,
+    .opblock .opblock-summary-path,
+    .opblock .opblock-summary-operation-id,
+    .opblock-description-wrapper p,
+    .opblock-external-docs-wrapper p,
+    .opblock-title_normal p,
+    .parameter__name,
+    .parameter__type,
+    .parameter__in,
+    .tab li,
+    .model,
+    label,
+    table thead tr th,
+    table thead tr td,
+    .response-col_status,
+    .response-col_links,
+    .responses-inner h4,
+    .responses-inner h5,
+    .prop-type,
+    .model-title,
+    section.models h4,
+    .btn,
+    .servers-title
+  ) {
+  color: var(--ink);
+  font-family: var(--font);
+}
+/* stylelint-enable selector-class-pattern */
+
+.swagger-ui
+  :is(
+    input,
+    textarea,
+    select,
+    .dialog-ux .modal-ux,
+    .opblock .opblock-section-header
+  ) {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--input-line);
+}
+
+.swagger-ui :is(.model-box, section.models, section.models .model-container) {
+  background: var(--subtle);
+  border-color: var(--line);
+}
+
+.swagger-ui
+  :is(
+    .opblock .opblock-section-header h4,
+    .dialog-ux .modal-ux h3,
+    .dialog-ux .modal-ux label,
+    .dialog-ux .modal-ux p
+  ) {
+  color: var(--ink);
+}
+
+.swagger-ui svg {
+  fill: var(--muted);
+}
+
+.swagger-ui a {
+  color: var(--action);
+}
+
+.swagger-ui .opblock {
+  box-shadow: none;
+}

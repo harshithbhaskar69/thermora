@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, contracts, unit tests and dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.12
+      - run: task setup
+      - run: task ci
+
+  integration:
+    name: PostgreSQL, MQTT and browser control loop
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.12
+      - run: task setup
+      - run: npm --prefix web exec -- playwright install --with-deps chromium
+      - run: task demo
+      - run: task test:ui
+      - run: task test:integration
+      - run: task test:e2e
+      - name: Stop the ephemeral CI stack
+        if: always()
+        run: |
+          if [ -f .local/compose.env ]; then
+            task down
+          fi
+
+  cloud:
+    name: Floci EKS, fleet and recovery
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.12
+      - run: task setup
+      - run: npm --prefix web exec -- playwright install --with-deps chromium
+      - run: task cloud:local-install
+      - run: task cloud:up
+      - run: task cloud:doctor
+      - run: task cloud:aws -- s3 ls
+      - run: task cloud:aws -- eks list-clusters
+      - run: task test:cloud
+      - run: task cloud:fleet COUNT=3
+      - run: task test:recovery
+      - run: task backup
+      - run: task restore FILE="$(cat .local/backups/latest)"
+      - run: task cloud:down
+      - run: task cloud:resume
+      - name: Stop the ephemeral local cloud
+        if: always()
+        run: |
+          if [ -f .local/cloud/compose.env ]; then
+            task cloud:down
+          fi

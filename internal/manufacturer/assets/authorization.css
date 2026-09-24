@@ -1,0 +1,168 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font: 14px/1.6 var(--font);
+}
+
+::selection {
+  color: var(--ink);
+  background: var(--selection);
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 32px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+header a {
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 20px;
+}
+
+header span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+main {
+  max-width: 560px;
+  padding: 32px;
+  margin: 48px auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+p {
+  margin: 0 0 16px;
+}
+
+ul {
+  padding-left: 20px;
+  margin: 20px 0 28px;
+}
+
+li {
+  margin-bottom: 8px;
+}
+
+.provider,
+.note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+form {
+  display: grid;
+  gap: 18px;
+}
+
+form label {
+  display: grid;
+  gap: 6px;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  min-height: 44px;
+  border: 1px solid var(--input-line);
+  border-radius: 5px;
+  padding: 9px 12px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+input {
+  width: 100%;
+  caret-color: var(--action);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+button {
+  cursor: pointer;
+  font-weight: 600;
+  background: var(--action);
+  color: var(--surface);
+  border-color: transparent;
+}
+
+button:hover {
+  background: var(--action-hover);
+}
+
+button.secondary {
+  color: var(--action);
+  background: var(--surface);
+  border-color: var(--input-line);
+}
+
+:where(a, button, input, select, summary):focus-visible {
+  outline: 3px solid var(--action);
+  outline-offset: 3px;
+}
+
+details {
+  padding: 20px 0;
+}
+
+summary {
+  min-height: 44px;
+  padding: 10px 0;
+  cursor: pointer;
+  color: var(--action);
+}
+
+code {
+  font:
+    12px ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+
+@media (width <= 600px) {
+  header {
+    padding: 12px 16px;
+  }
+
+  main {
+    margin: 24px 16px;
+    padding: 24px;
+  }
+
+  h1 {
+    font-size: 25px;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+}

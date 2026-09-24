@@ -1,0 +1,4 @@
+{
+  "proseWrap": "preserve",
+  "overrides": [{ "files": "*.yml", "options": { "singleQuote": false } }]
+}

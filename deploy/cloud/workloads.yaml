@@ -1,0 +1,348 @@
+apiVersion: v1
+kind: Service
+metadata: { name: floci, namespace: thermora }
+spec:
+  ports: [{ name: aws, port: 4566, targetPort: 4566 }]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: postgres, namespace: thermora }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 2Gi } }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: mqtt, namespace: thermora }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 256Mi } }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: manufacturer, namespace: thermora }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 256Mi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: postgres, namespace: thermora }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: postgres
+          image: postgres:18.6-alpine
+          imagePullPolicy: Never
+          env:
+            - { name: POSTGRES_USER, value: thermora }
+            - { name: POSTGRES_DB, value: thermora }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                {
+                  secretKeyRef:
+                    { name: thermora-local, key: postgres-password },
+                }
+          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql }]
+          readinessProbe:
+            exec: { command: [pg_isready, -U, thermora, -d, thermora] }
+            periodSeconds: 2
+          resources:
+            {
+              requests: { cpu: 100m, memory: 128Mi },
+              limits: { memory: 512Mi },
+            }
+      volumes: [{ name: data, persistentVolumeClaim: { claimName: postgres } }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: postgres, namespace: thermora }
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432, targetPort: 5432 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: postgres-access, namespace: thermora }
+spec:
+  podSelector: { matchLabels: { app: postgres } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { thermora-db-access: "true" } } }]
+      ports: [{ protocol: TCP, port: 5432 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: mqtt, namespace: thermora }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: mqtt } }
+  template:
+    metadata: { labels: { app: mqtt } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext: { runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532 }
+      initContainers:
+        - name: initialize-broker
+          image: postgres:18.6-alpine
+          imagePullPolicy: Never
+          command:
+            [
+              sh,
+              -c,
+              "if [ ! -f /data/dynamic-security.json ]; then cp /initial/dynamic-security.json /data/dynamic-security.json; fi",
+            ]
+          securityContext:
+            {
+              allowPrivilegeEscalation: false,
+              readOnlyRootFilesystem: true,
+              capabilities: { drop: [ALL] },
+            }
+          volumeMounts:
+            [
+              { name: data, mountPath: /data },
+              { name: initial, mountPath: /initial, readOnly: true },
+            ]
+      containers:
+        - name: mqtt
+          image: eclipse-mosquitto:2.0.22
+          imagePullPolicy: Never
+          securityContext:
+            {
+              allowPrivilegeEscalation: false,
+              readOnlyRootFilesystem: true,
+              capabilities: { drop: [ALL] },
+            }
+          volumeMounts:
+            - { name: data, mountPath: /mosquitto/data }
+            - { name: config, mountPath: /mosquitto/config, readOnly: true }
+            - { name: pki, mountPath: /run/pki, readOnly: true }
+          readinessProbe: { tcpSocket: { port: 8883 }, periodSeconds: 2 }
+          resources:
+            { requests: { cpu: 25m, memory: 32Mi }, limits: { memory: 128Mi } }
+      volumes:
+        - { name: data, persistentVolumeClaim: { claimName: mqtt } }
+        - name: initial
+          secret:
+            {
+              secretName: thermora-local,
+              defaultMode: 288,
+              items:
+                [{ key: dynamic-security.json, path: dynamic-security.json }],
+            }
+        - name: config
+          secret:
+            {
+              secretName: thermora-local,
+              defaultMode: 288,
+              items: [{ key: mosquitto.conf, path: mosquitto.conf }],
+            }
+        - name: pki
+          secret:
+            secretName: thermora-local
+            defaultMode: 288
+            items:
+              [
+                { key: ca.pem, path: ca.pem },
+                { key: mqtt.pem, path: mqtt.pem },
+                { key: mqtt.key, path: mqtt.key },
+              ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: mqtt, namespace: thermora }
+spec:
+  type: NodePort
+  selector: { app: mqtt }
+  ports: [{ port: 8883, targetPort: 8883, nodePort: 31883 }]
+---
+apiVersion: batch/v1
+kind: Job
+metadata: { name: migrate, namespace: thermora }
+spec:
+  backoffLimit: 8
+  activeDeadlineSeconds: 180
+  template:
+    metadata: { labels: { app: migrate, thermora-db-access: "true" } }
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: OnFailure
+      securityContext:
+        {
+          runAsUser: 65532,
+          runAsGroup: 65532,
+          fsGroup: 65532,
+          runAsNonRoot: true,
+        }
+      containers:
+        - name: migrate
+          image: thermora:local
+          imagePullPolicy: Never
+          command: [cloud, -migrate]
+          securityContext:
+            {
+              allowPrivilegeEscalation: false,
+              readOnlyRootFilesystem: true,
+              capabilities: { drop: [ALL] },
+            }
+          volumeMounts: [{ name: config, mountPath: /run, readOnly: true }]
+          resources:
+            { requests: { cpu: 50m, memory: 32Mi }, limits: { memory: 128Mi } }
+      volumes:
+        - name: config
+          secret:
+            {
+              secretName: thermora-local,
+              defaultMode: 288,
+              items: [{ key: migrate.json, path: cloud.json }],
+            }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: cloud, namespace: thermora }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: cloud } }
+  template:
+    metadata: { labels: { app: cloud, thermora-db-access: "true" } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {
+          runAsUser: 65532,
+          runAsGroup: 65532,
+          fsGroup: 65532,
+          runAsNonRoot: true,
+        }
+      containers:
+        - name: cloud
+          image: thermora:local
+          imagePullPolicy: Never
+          command: [cloud]
+          securityContext:
+            {
+              allowPrivilegeEscalation: false,
+              readOnlyRootFilesystem: true,
+              capabilities: { drop: [ALL] },
+            }
+          volumeMounts:
+            [
+              { name: config, mountPath: /run, readOnly: true },
+              { name: cloud-pki, mountPath: /run/pki, readOnly: true },
+            ]
+          startupProbe:
+            {
+              exec: { command: [thermora, health] },
+              periodSeconds: 3,
+              timeoutSeconds: 4,
+              failureThreshold: 60,
+            }
+          readinessProbe:
+            {
+              exec: { command: [thermora, health] },
+              periodSeconds: 5,
+              timeoutSeconds: 4,
+            }
+          livenessProbe:
+            {
+              httpGet: { path: /health/live, port: 8443, scheme: HTTPS },
+              periodSeconds: 10,
+            }
+          resources:
+            { requests: { cpu: 100m, memory: 64Mi }, limits: { memory: 256Mi } }
+        - name: manufacturer
+          image: thermora:local
+          imagePullPolicy: Never
+          command: [manufacturer]
+          securityContext:
+            {
+              allowPrivilegeEscalation: false,
+              readOnlyRootFilesystem: true,
+              capabilities: { drop: [ALL] },
+            }
+          volumeMounts:
+            [
+              { name: manufacturer-config, mountPath: /run, readOnly: true },
+              { name: manufacturer-pki, mountPath: /run/pki, readOnly: true },
+              { name: manufacturer-data, mountPath: /state },
+            ]
+          readinessProbe:
+            {
+              httpGet: { path: /health/live, port: 8444, scheme: HTTPS },
+              periodSeconds: 5,
+            }
+          resources:
+            { requests: { cpu: 25m, memory: 32Mi }, limits: { memory: 128Mi } }
+      volumes:
+        - name: config
+          secret:
+            {
+              secretName: thermora-local,
+              defaultMode: 288,
+              items:
+                [
+                  { key: cloud.json, path: cloud.json },
+                  { key: onboarding.json, path: onboarding.json },
+                  { key: operator-access.json, path: operator-access.json },
+                ],
+            }
+        - name: cloud-pki
+          secret:
+            {
+              secretName: thermora-local,
+              defaultMode: 288,
+              items:
+                [
+                  { key: ca.pem, path: ca.pem },
+                  { key: cloud.pem, path: cloud.pem },
+                  { key: cloud.key, path: cloud.key },
+                ],
+            }
+        - name: manufacturer-config
+          secret:
+            {
+              secretName: thermora-local,
+              defaultMode: 288,
+              items: [{ key: manufacturer.json, path: manufacturer.json }],
+            }
+        - name: manufacturer-pki
+          secret:
+            {
+              secretName: thermora-local,
+              defaultMode: 288,
+              items:
+                [
+                  { key: ca.pem, path: ca.pem },
+                  { key: manufacturer.pem, path: manufacturer.pem },
+                  { key: manufacturer.key, path: manufacturer.key },
+                ],
+            }
+        - {
+            name: manufacturer-data,
+            persistentVolumeClaim: { claimName: manufacturer },
+          }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: cloud, namespace: thermora }
+spec:
+  type: NodePort
+  selector: { app: cloud }
+  ports:
+    - { name: https, port: 8443, targetPort: 8443, nodePort: 30443 }
+    - { name: manufacturer, port: 8444, targetPort: 8444, nodePort: 30444 }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: manufacturer, namespace: thermora }
+spec:
+  selector: { app: cloud }
+  ports: [{ port: 8444, targetPort: 8444 }]

@@ -1,0 +1,21 @@
+min_version = "2026.9.12"
+
+[tools]
+go = "1.27.1"
+node = "24.14.0"
+"aqua:aws/aws-cli" = "2.34.38"
+"aqua:go-task/task" = "3.53.1"
+"aqua:golangci/golangci-lint" = "2.13.2"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.8.0"
+"aqua:rhysd/actionlint" = "1.7.12"
+"aqua:koalaman/shellcheck" = "0.11.0"
+"aqua:mvdan/sh" = "3.14.1"
+"aqua:hadolint/hadolint" = "2.15.1"
+
+[settings]
+lockfile = true
+lockfile_platforms = ["linux-x64", "linux-arm64", "macos-x64", "macos-arm64"]
+
+[env]
+# Refuse an implicit Go toolchain download outside this project's version pin.
+GOTOOLCHAIN = "local"

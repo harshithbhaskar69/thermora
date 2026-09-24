@@ -1,0 +1,78 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags: [integration]
+  modules-download-mode: readonly
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - wastedassign
+    - asasalint
+    - asciicheck
+    - errcheck
+    - errname
+    - errorlint
+    - nilerr
+    - nilnesserr
+    - durationcheck
+    - exhaustive
+    - exptostd
+    - forcetypeassert
+    - copyloopvar
+    - gocheckcompilerdirectives
+    - goprintffuncname
+    - iface
+    - mirror
+    - gosec
+    - bidichk
+    - bodyclose
+    - noctx
+    - sqlclosecheck
+    - rowserrcheck
+    - fatcontext
+    - sloglint
+    - predeclared
+    - recvcheck
+    - misspell
+    - unconvert
+    - thelper
+    - tparallel
+    - nolintlint
+  settings:
+    misspell:
+      ignore-rules: [mosquitto]
+    errcheck:
+      check-type-assertions: true
+    exhaustive:
+      check: [switch, map]
+      default-signifies-exhaustive: true
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+  exclusions:
+    generated: strict
+    presets: []
+
+formatters:
+  enable: [gofumpt, goimports, golines]
+  settings:
+    goimports:
+      local-prefixes: [thermora.local/thermora]
+    golines:
+      max-len: 120
+      reformat-tags: false
+      chain-split-dots: false
+  exclusions:
+    generated: strict
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

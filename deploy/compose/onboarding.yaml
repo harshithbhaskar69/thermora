@@ -1,0 +1,21 @@
+services:
+  cloud:
+    volumes:
+      - ../../.local/onboarding.json:/run/onboarding.json:ro
+  manufacturer:
+    image: thermora:local
+    command: [manufacturer]
+    user: "${THERMORA_UID}:${THERMORA_GID}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    restart: unless-stopped
+    ports: ["127.0.0.1:8444:8444"]
+    volumes:
+      - ../../.local/manufacturer/config.json:/run/manufacturer.json:ro
+      - ../../.local/manufacturer/state:/state
+      - ../../.local/pki/manufacturer.pem:/run/pki/manufacturer.pem:ro
+      - ../../.local/pki/manufacturer.key:/run/pki/manufacturer.key:ro
+      - ../../.local/pki/ca.pem:/run/pki/ca.pem:ro
+    networks: [uplink]

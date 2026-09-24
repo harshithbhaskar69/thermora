@@ -1,0 +1,13 @@
+.git/
+.local/
+.impeccable/
+PRODUCT.md
+DESIGN.md
+.task/
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+web/src/api/schema.gen.ts
+web/package-lock.json
+internal/transport/http/generated/
